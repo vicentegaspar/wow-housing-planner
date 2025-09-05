@@ -1,0 +1,5 @@
+{
+  "name": "WoW Player Housing Simulator",
+  "description": "A web application that allows users to design and build custom house layouts for the upcoming Player Housing feature in World of Warcraft. The application's UI is intuitive, resembling a game-like interface, and provides a seamless experience for assembling rooms, connecting them, and adding multiple floors.",
+  "requestFramePermissions": []
+}

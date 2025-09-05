@@ -1,0 +1,97 @@
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://aistudiocdn.com/three@^0.179.1",
+    "three/": "https://aistudiocdn.com/three@^0.179.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.12",
+    "@jest/globals": "https://aistudiocdn.com/@jest/globals@^30.1.1",
+    "@testing-library/react": "https://aistudiocdn.com/@testing-library/react@^16.3.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.15.0"
+  }
+}
+</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WoW Player Housing Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=MedievalSharp&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --font-title: 'MedievalSharp', cursive;
+            --font-body: 'Marcellus', serif;
+            --color-bg-dark: #0d1017;
+            --color-bg-panel: #1a1d24; 
+            --color-border: #4a4a52;
+            --color-accent: #f0b90b;
+            --color-accent-hover: #ffe897;
+            --color-text-header: #e0e0e0;
+            --color-text-body: #b0b0b0;
+        }
+        body {
+            font-family: var(--font-body);
+            background-color: var(--color-bg-dark);
+            color: var(--color-text-body);
+            overflow: hidden; /* Prevent body scrollbars */
+        }
+        .wow-panel {
+            background-color: var(--color-bg-panel);
+            border-color: var(--color-border);
+        }
+        .wow-button {
+            background-color: transparent;
+            border: 2px solid var(--color-border);
+            color: var(--color-text-header);
+            font-family: var(--font-body);
+            font-weight: bold;
+            transition: all 0.2s ease-in-out;
+        }
+        .wow-button:hover:not(:disabled) {
+            border-color: var(--color-accent-hover);
+            color: var(--color-accent-hover);
+            background-color: rgba(240, 185, 11, 0.1);
+        }
+        .wow-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* A simple background pattern for the canvas */
+        .canvas-bg {
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+        /* Add scrollbar styles to match the theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--color-bg-dark);
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: var(--color-border);
+            border-radius: 4px;
+            border: 2px solid var(--color-bg-dark);
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: var(--color-accent);
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</body>
+</html>
