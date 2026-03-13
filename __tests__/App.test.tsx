@@ -1,10 +1,7 @@
 
 
-/**
- * @jest-environment jsdom
- */
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useLayoutManager } from '../components/hooks';
 import { Layout, RoomShape, Sector } from '../types';
 
@@ -27,15 +24,15 @@ const localStorageMock = (() => {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 // Mock utility functions
-const mockSetShowStartupModal = jest.fn();
+const mockSetShowStartupModal = vi.fn();
 
 describe('useLayoutManager Hook', () => {
   beforeEach(() => {
     localStorageMock.clear();
     mockSetShowStartupModal.mockClear();
     // Mock window.confirm to always be true for import tests
-    jest.spyOn(window, 'confirm').mockImplementation(() => true);
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'confirm').mockImplementation(() => true);
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   it('should initialize with a default layout and show startup modal if no saved data', () => {
@@ -79,6 +76,18 @@ describe('useLayoutManager Hook', () => {
       result.current.handleFloorChange('down');
     });
     expect(result.current.currentFloor).toBe(1);
+
+    // Max 10 floors: cannot go above 10
+    act(() => {
+      for (let i = 0; i < 15; i++) {
+        result.current.handleFloorChange('up');
+      }
+    });
+    expect(result.current.currentFloor).toBe(10);
+    act(() => {
+      result.current.handleFloorChange('up');
+    });
+    expect(result.current.currentFloor).toBe(10);
   });
   
   it('should save and delete sectors', () => {
@@ -178,6 +187,40 @@ describe('useLayoutManager Hook', () => {
     expect(result.current.layout).toEqual(newLayout);
   });
   
+  it('should clamp import to MAX_FLOORS and warn when upper floors are dropped', () => {
+    const { result } = renderHook(() => useLayoutManager(false, mockSetShowStartupModal));
+    const newLayout: Layout = {
+      floors: {
+        1: { rooms: [{ id: 'a', shape: RoomShape.SQUARE, x: 0, y: 0, rotation: 0 }] },
+        10: { rooms: [{ id: 'b', shape: RoomShape.SQUARE, x: 10, y: 10, rotation: 0 }] },
+        11: { rooms: [{ id: 'c', shape: RoomShape.SQUARE, x: 20, y: 20, rotation: 0 }] },
+        12: { rooms: [] },
+      },
+      sectors: {},
+    };
+    const jsonString = JSON.stringify(newLayout);
+
+    // Clear mock AFTER initial render (which triggers the startup modal because
+    // localStorage is empty), so we only assert on calls made by the import itself.
+    mockSetShowStartupModal.mockClear();
+
+    let success = false;
+    act(() => {
+      success = result.current.handleImportLayout(jsonString);
+    });
+
+    expect(success).toBe(true);
+    expect(result.current.layout.floors[1]).toBeDefined();
+    expect(result.current.layout.floors[10]).toBeDefined();
+    expect(result.current.layout.floors[11]).toBeUndefined();
+    expect(result.current.layout.floors[12]).toBeUndefined();
+    expect(mockSetShowStartupModal).not.toHaveBeenCalled();
+    const calls = (window.alert as ReturnType<typeof vi.fn>).mock.calls;
+    const lastAlert = calls[calls.length - 1]?.[0] as string;
+    expect(lastAlert).toContain('11');
+    expect(lastAlert).toContain('12');
+  });
+
   it('should fail to import from an invalid string', () => {
     const { result } = renderHook(() => useLayoutManager(false, mockSetShowStartupModal));
     const invalidString = "this is not a valid layout";

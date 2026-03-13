@@ -52,6 +52,8 @@ export interface Sector {
     name: string;
     color: string;
     description: string;
+    /** Base64 data URL (e.g. data:image/png;base64,...) for 3D wall/floor texture */
+    textureData?: string;
 }
 
 export interface Layout {

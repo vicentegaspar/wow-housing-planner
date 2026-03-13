@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Layout, RoomInstance, RoomShape, Point, DraggedRoom, Sector } from '../types';
 import { ROOM_DEFINITIONS, SNAP_DISTANCE } from '../constants';
+import { clampLayoutFloors, MAX_FLOORS } from '../layoutFloors';
 import { rotatePoint } from '../utils';
 
 const initialLayout: Layout = { floors: { 1: { rooms: [] } }, sectors: {} };
@@ -80,8 +81,6 @@ export const useModalManager = () => {
     const [isExporting, setIsExporting] = useState(false);
     const [isSectorPanelOpen, setIsSectorPanelOpen] = useState(false);
     const [showStartupModal, setShowStartupModal] = useState(false);
-    const [exportString, setExportString] = useState("");
-
     return {
         isImportModalOpen, setIsImportModalOpen,
         isExportModalOpen, setIsExportModalOpen,
@@ -89,7 +88,6 @@ export const useModalManager = () => {
         isExporting, setIsExporting,
         isSectorPanelOpen, setIsSectorPanelOpen,
         showStartupModal, setShowStartupModal,
-        exportString, setExportString,
     };
 };
 
@@ -115,7 +113,9 @@ export const useLayoutManager = (showStartupModal: boolean, setShowStartupModal:
                 const parsed = JSON.parse(savedLayout);
                 const hasAnyRooms = Object.values(parsed.floors || {}).some((f: any) => f.rooms && f.rooms.length > 0);
                 if (parsed.floors && hasAnyRooms) {
-                    resetLayout({ sectors: {}, ...parsed });
+                    const merged = { sectors: parsed.sectors || {}, floors: parsed.floors || {} } as Layout;
+                    const { layout: clamped } = clampLayoutFloors(merged);
+                    resetLayout(clamped);
                 } else {
                     localStorage.removeItem('wow-house-layout');
                     setShowStartupModal(true);
@@ -144,9 +144,7 @@ export const useLayoutManager = (showStartupModal: boolean, setShowStartupModal:
     const handleFloorChange = useCallback((direction: 'up' | 'down') => {
         setCurrentFloor(newFloor => {
             const updatedFloor = direction === 'up' ? newFloor + 1 : newFloor - 1;
-            if (updatedFloor > 0 && updatedFloor <= 99) {
-                // Do not create a new floor if it doesn't exist, this should be an explicit user action
-                // This prevents accidental floor creation when scrolling through empty numbers
+            if (updatedFloor >= 1 && updatedFloor <= MAX_FLOORS) {
                 return updatedFloor;
             }
             return newFloor;
@@ -200,10 +198,23 @@ export const useLayoutManager = (showStartupModal: boolean, setShowStartupModal:
         try {
             const parsedLayout = JSON.parse(jsonString);
             if (parsedLayout && typeof parsedLayout === 'object' && parsedLayout.floors && parsedLayout.sectors) {
-                resetLayout(parsedLayout);
-                const firstFloor = Object.keys(parsedLayout.floors).map(Number).sort((a,b) => a - b)[0] || 1;
+                const raw: Layout = {
+                    sectors: parsedLayout.sectors || {},
+                    floors: parsedLayout.floors || {},
+                };
+                const { layout: clamped, droppedFloorIndices } = clampLayoutFloors(raw);
+                resetLayout(clamped);
+                const firstFloor = Math.min(
+                    MAX_FLOORS,
+                    Object.keys(clamped.floors).map(Number).sort((a, b) => a - b)[0] || 1
+                );
                 setCurrentFloor(firstFloor);
-                alert("Project imported successfully!");
+                alert(
+                    droppedFloorIndices.length > 0
+                        ? `Project imported. Warning: floors beyond ${MAX_FLOORS} are not supported. ` +
+                              `Removed floor(s): ${droppedFloorIndices.join(', ')}. Only floors 1–${MAX_FLOORS} were kept.`
+                        : 'Project imported successfully!'
+                );
                 return true;
             } else {
                 throw new Error("Invalid layout format.");
@@ -216,17 +227,27 @@ export const useLayoutManager = (showStartupModal: boolean, setShowStartupModal:
     }, [resetLayout]);
 
     const handleSelectTemplate = (templateLayout: Layout) => {
-        const newLayout = JSON.parse(JSON.stringify(templateLayout)); 
-        resetLayout(newLayout);
-        const firstFloor = Object.keys(newLayout.floors).map(Number).sort((a,b) => a - b)[0] || 1;
+        const newLayout = JSON.parse(JSON.stringify(templateLayout)) as Layout;
+        const { layout: clamped } = clampLayoutFloors(newLayout);
+        resetLayout(clamped);
+        const firstFloor = Math.min(
+            MAX_FLOORS,
+            Object.keys(clamped.floors).map(Number).sort((a, b) => a - b)[0] || 1
+        );
         setCurrentFloor(firstFloor);
     };
+
+    const handleNewBlankProject = useCallback(() => {
+        localStorage.removeItem('wow-house-layout');
+        resetLayout(initialLayout);
+        setCurrentFloor(1);
+    }, [resetLayout]);
 
     return {
         layout, setLayout,
         currentFloor, setCurrentFloor, handleFloorChange,
         handleSaveSector, handleDeleteSector,
-        handleImportLayout, handleSelectTemplate,
+        handleImportLayout, handleSelectTemplate, handleNewBlankProject,
         undo, redo, canUndo, canRedo
     };
 };
@@ -234,11 +255,41 @@ export const useLayoutManager = (showStartupModal: boolean, setShowStartupModal:
 // ===================================================================================
 // Canvas Viewport Controls
 // ===================================================================================
+
+/** localStorage key for pan/zoom; also written immediately on “Reset view”. */
+export const VIEWPORT_STORAGE_KEY = 'wow-housing-viewport';
+
+function loadStoredViewport(): { zoom: number; pan: Point } {
+    try {
+        const raw = localStorage.getItem(VIEWPORT_STORAGE_KEY);
+        if (!raw) return { zoom: 1, pan: { x: 0, y: 0 } };
+        const o = JSON.parse(raw) as { zoom?: unknown; pan?: { x?: unknown; y?: unknown } };
+        const zoom =
+            typeof o.zoom === 'number' && Number.isFinite(o.zoom)
+                ? Math.max(0.2, Math.min(3, o.zoom))
+                : 1;
+        const pan =
+            o.pan &&
+            typeof o.pan.x === 'number' &&
+            typeof o.pan.y === 'number' &&
+            Number.isFinite(o.pan.x) &&
+            Number.isFinite(o.pan.y)
+                ? { x: o.pan.x, y: o.pan.y }
+                : { x: 0, y: 0 };
+        return { zoom, pan };
+    } catch {
+        return { zoom: 1, pan: { x: 0, y: 0 } };
+    }
+}
+
 export const useCanvasControls = (assigningSectorId: string | null) => {
-    const [zoom, setZoom] = useState(1);
-    const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+    const initial = loadStoredViewport();
+    const [zoom, setZoom] = useState(initial.zoom);
+    const [pan, setPan] = useState<Point>(initial.pan);
     const [isPanning, setIsPanning] = useState(false);
     const panStartRef = useRef<Point>({ x: 0, y: 0 });
+    /** Sync with isPanning so window listeners react on the same frame as mousedown (no effect delay). */
+    const isPanningRef = useRef(false);
 
     const handleZoom = useCallback((delta: number) => {
         setZoom(prevZoom => Math.max(0.2, Math.min(3, prevZoom + delta)));
@@ -249,41 +300,65 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
         handleZoom(-e.deltaY * 0.001);
     };
     
-    const handlePanMouseDown = (e: React.MouseEvent) => {
-        if (!assigningSectorId && (e.button === 1 || (e.button === 0 && e.shiftKey))) {
-            e.preventDefault();
-            setIsPanning(true);
-            panStartRef.current = { x: e.clientX, y: e.clientY };
-        }
+    /**
+     * Pan: attach move/up only after mousedown on the canvas (empty area).
+     * Using document + capture ensures we still receive events if something
+     * stops propagation on the canvas tree, and avoids relying on a single
+     * permanent window listener that can get out of sync with App’s own
+     * mousemove/mouseup subscriptions.
+     */
+    const handlePanMouseDown = (e: React.MouseEvent | React.PointerEvent) => {
+        if (assigningSectorId) return;
+        if (e.button !== undefined && e.button !== 0 && e.button !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        isPanningRef.current = true;
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX, y: e.clientY };
+
+        const onMove = (ev: MouseEvent | PointerEvent) => {
+            if (!isPanningRef.current) return;
+            setPan(prevPan => ({
+                x: prevPan.x + ev.clientX - panStartRef.current.x,
+                y: prevPan.y + ev.clientY - panStartRef.current.y,
+            }));
+            panStartRef.current = { x: ev.clientX, y: ev.clientY };
+        };
+
+        const onUp = () => {
+            isPanningRef.current = false;
+            setIsPanning(false);
+            document.removeEventListener('mousemove', onMove, true);
+            document.removeEventListener('pointermove', onMove, true);
+            document.removeEventListener('mouseup', onUp, true);
+            document.removeEventListener('pointerup', onUp, true);
+            document.removeEventListener('pointercancel', onUp, true);
+        };
+
+        document.addEventListener('mousemove', onMove, { capture: true });
+        document.addEventListener('pointermove', onMove, { capture: true });
+        document.addEventListener('mouseup', onUp, { capture: true });
+        document.addEventListener('pointerup', onUp, { capture: true });
+        document.addEventListener('pointercancel', onUp, { capture: true });
     };
 
+    /** Debounced so pan drags don’t write localStorage on every mousemove (~60+ Hz). */
+    const viewportSaveDelayMs = 220;
     useEffect(() => {
-        const handlePanMove = (e: MouseEvent) => {
-            if (!isPanning) return;
-            setPan(prevPan => ({
-                x: prevPan.x + e.clientX - panStartRef.current.x,
-                y: prevPan.y + e.clientY - panStartRef.current.y,
-            }));
-            panStartRef.current = { x: e.clientX, y: e.clientY };
-        };
-
-        const handlePanMouseUp = () => {
-            if (isPanning) {
-                setIsPanning(false);
+        const t = window.setTimeout(() => {
+            try {
+                localStorage.setItem(
+                    VIEWPORT_STORAGE_KEY,
+                    JSON.stringify({ zoom, pan })
+                );
+            } catch {
+                /* quota / private mode */
             }
-        };
+        }, viewportSaveDelayMs);
+        return () => clearTimeout(t);
+    }, [zoom, pan]);
 
-        window.addEventListener('mousemove', handlePanMove);
-        window.addEventListener('mouseup', handlePanMouseUp);
-
-        return () => {
-            window.removeEventListener('mousemove', handlePanMove);
-            window.removeEventListener('mouseup', handlePanMouseUp);
-        };
-    }, [isPanning]);
-
-
-    return { zoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown };
+    return { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown };
 };
 
 
@@ -343,6 +418,7 @@ export const useRoomInteraction = (
 
     const handleExistingRoomDragStart = (room: RoomInstance, e: React.MouseEvent) => {
         if (!canvasRef.current || assigningSectorId) return;
+        if (e.button === 1) return; // middle-button pan — not room drag
         setSelectedRoomId(null);
         const rect = canvasRef.current.getBoundingClientRect();
         const mouseX = (e.clientX - rect.left - pan.x) / zoom;

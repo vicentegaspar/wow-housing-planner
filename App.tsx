@@ -1,18 +1,21 @@
 
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useState, useMemo, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { ExportPreview } from './components/ExportPreview';
 import { SectorPanel } from './components/SectorPanel';
-import { ThreeDView } from './components/ThreeDView';
+const ThreeDViewLazy = lazy(() => import('./components/ThreeDView'));
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { StartupModal } from './components/StartupModal';
+import { ConfirmModal } from './components/ConfirmModal';
+import { TemplateModal } from './components/TemplateModal';
 import { CanvasOverlays } from './components/CanvasOverlays';
-import { useLayoutManager, useCanvasControls, useRoomInteraction } from './components/hooks';
+import { useLayoutManager, useCanvasControls, useRoomInteraction, VIEWPORT_STORAGE_KEY } from './components/hooks';
 import type { Layout, RoomInstance, RoomShape } from './types';
 import { ROOM_DEFINITIONS } from './constants';
+import { MAX_FLOORS } from './layoutFloors';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const TOTAL_AREA_LIMIT = 100000; // Increased limit for larger projects
@@ -72,18 +75,27 @@ const App: React.FC = () => {
     const [isExportingPDF, setIsExportingPDF] = useState(false);
     const [isSectorPanelOpen, setIsSectorPanelOpen] = useState(false);
     const [showStartupModal, setShowStartupModal] = useState(false);
-    const [exportString, setExportString] = useState("");
+    const [showConfirmNewProject, setShowConfirmNewProject] = useState(false);
+    const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+    const [showConfirmTemplate, setShowConfirmTemplate] = useState(false);
+    const [pendingTemplateLayout, setPendingTemplateLayout] = useState<import('./types').Layout | null>(null);
     const [assigningSectorId, setAssigningSectorId] = useState<string | null>(null);
 
     // Core Hooks
-    const { layout, setLayout, currentFloor, setCurrentFloor, handleFloorChange, handleSaveSector, handleDeleteSector, handleImportLayout, handleSelectTemplate, undo, redo, canUndo, canRedo } = useLayoutManager(showStartupModal, setShowStartupModal);
-    const { zoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown } = useCanvasControls(assigningSectorId);
+    const { layout, setLayout, currentFloor, setCurrentFloor, handleFloorChange, handleSaveSector, handleDeleteSector, handleImportLayout, handleSelectTemplate, handleNewBlankProject, undo, redo, canUndo, canRedo } = useLayoutManager(showStartupModal, setShowStartupModal);
+    const { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown } = useCanvasControls(assigningSectorId);
     const { draggedRoom, setDraggedRoom, selectedRoomId, setSelectedRoomId, canvasRef, handleRoomDragStart, handleExistingRoomDragStart, handleMouseMove, handleMouseUp, handleRoomClick, handleCanvasClick } = useRoomInteraction({ layout, setLayout, currentFloor, zoom, pan, isPanning, assigningSectorId, setAssigningSectorId });
 
     const totalArea = useMemo(() => {
-        return Object.values(layout.floors).reduce((acc, floor) => {
-            return acc + (floor.rooms || []).reduce((floorAcc, room) => floorAcc + (ROOM_DEFINITIONS[room.shape]?.area || 0), 0);
-        }, 0) / 100; // Convert to m²
+        let sum = 0;
+        for (let n = 1; n <= MAX_FLOORS; n++) {
+            const floor = layout.floors[n];
+            if (!floor?.rooms?.length) continue;
+            for (const room of floor.rooms) {
+                sum += ROOM_DEFINITIONS[room.shape]?.area || 0;
+            }
+        }
+        return sum / 100; // Convert to m² (only floors 1–MAX_FLOORS)
     }, [layout]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -152,34 +164,75 @@ const App: React.FC = () => {
         };
     }, [handleKeyDown, handleMouseMove, handleMouseUp]);
     
-     const handleOpenExportModal = () => {
+    const handleOpenExportModal = () => {
+        setIsExportModalOpen(true);
+    };
+
+    const hasAnyRooms = useMemo(() =>
+        Object.values(layout.floors).some(f => f.rooms.length > 0),
+    [layout.floors]);
+
+    /** Neutral canvas view + flush stored viewport so reload doesn’t restore old pan/zoom. */
+    const resetViewport = useCallback(() => {
+        setPan({ x: 0, y: 0 });
+        setZoom(1);
         try {
-            const jsonString = JSON.stringify(layout);
-            const base64String = btoa(unescape(encodeURIComponent(jsonString)));
-            setExportString(base64String);
-            setIsExportModalOpen(true);
-        } catch (e) {
-            setError("Could not generate the export code. Your project might be too large or corrupted.");
+            localStorage.setItem(
+                VIEWPORT_STORAGE_KEY,
+                JSON.stringify({ zoom: 1, pan: { x: 0, y: 0 } })
+            );
+        } catch {
+            /* ignore */
         }
+    }, [setPan, setZoom]);
+
+    const startNewBlankProject = useCallback(() => {
+        resetViewport();
+        handleNewBlankProject();
+    }, [resetViewport, handleNewBlankProject]);
+
+    const handleNewProjectRequest = () => {
+        if (hasAnyRooms) {
+            setShowConfirmNewProject(true);
+        } else {
+            startNewBlankProject();
+        }
+    };
+
+    /** Reset pan/zoom so the new template is framed from a neutral viewport. */
+    const applyTemplateLayout = useCallback(
+        (templateLayout: import('./types').Layout) => {
+            resetViewport();
+            handleSelectTemplate(templateLayout);
+        },
+        [handleSelectTemplate, resetViewport]
+    );
+
+    const handleTemplateRequest = (templateLayout: import('./types').Layout) => {
+        if (hasAnyRooms) {
+            setPendingTemplateLayout(templateLayout);
+            setIsTemplateModalOpen(false);
+            setShowConfirmTemplate(true);
+        } else {
+            applyTemplateLayout(templateLayout);
+            setIsTemplateModalOpen(false);
+        }
+    };
+
+    const handleConfirmTemplate = () => {
+        if (pendingTemplateLayout) {
+            applyTemplateLayout(pendingTemplateLayout);
+            setPendingTemplateLayout(null);
+        }
+        setShowConfirmTemplate(false);
     };
     
     const handleDoImport = (data: string) => {
-        if(handleImportLayout(data)) {
+        if (handleImportLayout(data)) {
+            resetViewport();
             setIsImportModalOpen(false);
         }
-    }
-
-    const handleFloorNameChange = (name: string) => {
-        setLayout(prev => {
-            const newFloors = { ...prev.floors };
-            if (!newFloors[currentFloor]) {
-                newFloors[currentFloor] = { rooms: [], name: name };
-            } else {
-                 newFloors[currentFloor] = { ...newFloors[currentFloor], name: name };
-            }
-            return { ...prev, floors: newFloors };
-        });
-    }
+    };
 
     const lowerFloorRooms = useMemo(() => {
         const lowerFloor = currentFloor - 1;
@@ -192,13 +245,15 @@ const App: React.FC = () => {
                 currentFloor={currentFloor}
                 onFloorChange={handleFloorChange}
                 onZoom={handleZoom}
+                onResetView={resetViewport}
                 layout={layout}
                 isSectorPanelOpen={isSectorPanelOpen}
                 onToggleSectorPanel={() => setIsSectorPanelOpen(!isSectorPanelOpen)}
                 onToggle3DView={() => setIs3DViewOpen(true)}
+                onNewProject={handleNewProjectRequest}
+                onOpenTemplateModal={() => setIsTemplateModalOpen(true)}
                 onOpenImportModal={() => setIsImportModalOpen(true)}
                 onOpenExportModal={handleOpenExportModal}
-                onFloorNameChange={handleFloorNameChange}
                 onUndo={undo}
                 onRedo={redo}
                 canUndo={canUndo}
@@ -206,11 +261,15 @@ const App: React.FC = () => {
             />
             <main className="flex-1 flex overflow-hidden">
                 <Sidebar onRoomDragStart={handleRoomDragStart} />
-                <div className="flex-1 flex flex-col relative" onClick={handleCanvasClick}>
+                <div
+                    className="flex-1 flex flex-col relative min-h-0"
+                    onClick={handleCanvasClick}
+                    onPointerDown={handlePanMouseDown}
+                >
                     <CanvasOverlays 
                         totalArea={totalArea} 
                         areaLimit={TOTAL_AREA_LIMIT} 
-                        floorName={layout.floors[currentFloor]?.name || `Floor ${currentFloor}`}
+                        floorName={`Floor ${currentFloor}`}
                     />
                     <Canvas
                         ref={canvasRef}
@@ -219,6 +278,7 @@ const App: React.FC = () => {
                         lowerFloorRooms={lowerFloorRooms}
                         zoom={zoom}
                         pan={pan}
+                        isPanning={isPanning}
                         draggedRoom={draggedRoom}
                         selectedRoomId={selectedRoomId}
                         isExporting={isExportingPDF}
@@ -241,10 +301,54 @@ const App: React.FC = () => {
             </main>
 
             <AnimatePresence>
-                {showStartupModal && <StartupModal onClose={() => setShowStartupModal(false)} onOpenImportModal={() => setIsImportModalOpen(true)} onSelectTemplate={(l) => { handleSelectTemplate(l); setShowStartupModal(false);}} />}
+                {showStartupModal && <StartupModal onClose={() => setShowStartupModal(false)} onNewBlankProject={() => { startNewBlankProject(); setShowStartupModal(false); }} onOpenImportModal={() => { setShowStartupModal(false); setIsImportModalOpen(true); }} onSelectTemplate={(l) => { applyTemplateLayout(l); setShowStartupModal(false); }} onOpenTemplateModal={() => { setShowStartupModal(false); setIsTemplateModalOpen(true); }} />}
+                {isTemplateModalOpen && (
+                    <TemplateModal
+                        onClose={() => setIsTemplateModalOpen(false)}
+                        onSelectTemplate={handleTemplateRequest}
+                    />
+                )}
+                {showConfirmTemplate && (
+                    <ConfirmModal
+                        title="Load Template"
+                        message="This will overwrite your current project with the selected template. Any unsaved work will be lost."
+                        confirmLabel="Yes, Load Template"
+                        cancelLabel="Keep Working"
+                        dangerous
+                        onConfirm={handleConfirmTemplate}
+                        onCancel={() => { setShowConfirmTemplate(false); setPendingTemplateLayout(null); }}
+                    />
+                )}
+                {showConfirmNewProject && (
+                    <ConfirmModal
+                        title="New Blank Project"
+                        message="This will permanently clear your current project and all unsaved changes. Are you sure?"
+                        confirmLabel="Yes, Start Fresh"
+                        cancelLabel="Keep Working"
+                        dangerous
+                        onConfirm={() => { startNewBlankProject(); setShowConfirmNewProject(false); }}
+                        onCancel={() => setShowConfirmNewProject(false)}
+                    />
+                )}
                 {isImportModalOpen && <ImportModal onClose={() => setIsImportModalOpen(false)} onImport={handleDoImport} />}
-                {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} exportString={exportString} layout={layout} onExportPDF={() => setIsExportingPDF(true)} isExportingPDF={isExportingPDF} />}
-                {is3DViewOpen && <ThreeDView layout={layout} onClose={() => setIs3DViewOpen(false)} />}
+                {isExportModalOpen && <ExportModal onClose={() => setIsExportModalOpen(false)} layout={layout} onExportPDF={() => setIsExportingPDF(true)} isExportingPDF={isExportingPDF} />}
+                {is3DViewOpen && (
+                    <Suspense
+                        fallback={
+                            <div className="absolute inset-0 bg-black/70 z-40 flex items-center justify-center">
+                                <div className="text-center">
+                                    <svg className="animate-spin h-10 w-10 text-yellow-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    <p className="font-title text-xl text-yellow-400 mt-4">Loading 3D engine…</p>
+                                </div>
+                            </div>
+                        }
+                    >
+                        <ThreeDViewLazy layout={layout} onClose={() => setIs3DViewOpen(false)} />
+                    </Suspense>
+                )}
             </AnimatePresence>
 
             <ExportPreview

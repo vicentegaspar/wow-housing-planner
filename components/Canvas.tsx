@@ -10,6 +10,7 @@ interface CanvasProps {
     lowerFloorRooms: RoomInstance[];
     zoom: number;
     pan: Point;
+    isPanning: boolean;
     draggedRoom: DraggedRoom | null;
     selectedRoomId: string | null;
     isExporting: boolean;
@@ -21,7 +22,7 @@ interface CanvasProps {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
-    ({ layout, currentFloor, lowerFloorRooms, zoom, pan, draggedRoom, selectedRoomId, isExporting, onWheel, onMouseDown, onExistingRoomDragStart, onRoomClick, assigningSectorId }, ref) => {
+    ({ layout, currentFloor, lowerFloorRooms, zoom, pan, isPanning, draggedRoom, selectedRoomId, isExporting, onWheel, onMouseDown, onExistingRoomDragStart, onRoomClick, assigningSectorId }, ref) => {
         const rooms = layout.floors[currentFloor]?.rooms || [];
         const sectors = layout.sectors || {};
         
@@ -33,14 +34,15 @@ export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
         return (
             <div
                 ref={ref}
-                className="flex-1 bg-gray-800 overflow-hidden canvas-bg"
+                className="flex-1 min-h-0 bg-gray-800 overflow-hidden canvas-bg"
                 style={{
                     backgroundSize: `${25 * zoom}px ${25 * zoom}px`,
                     backgroundPosition: `${pan.x}px ${pan.y}px`,
-                    cursor: 'crosshair',
+                    cursor: isPanning ? 'grabbing' : 'grab',
+                    touchAction: 'none',
                 }}
                 onWheel={onWheel}
-                onMouseDown={onMouseDown}
+                onPointerDown={onMouseDown}
             >
                 <div
                     className="w-full h-full"
@@ -49,7 +51,7 @@ export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
                         transformOrigin: 'top left',
                     }}
                 >
-                    <svg id="floor-plan-svg" width="100%" height="100%" style={{ overflow: 'visible' }}>
+                    <svg id="floor-plan-svg" width="100%" height="100%" style={{ overflow: 'visible', pointerEvents: 'none' }}>
                         {/* Render ghost rooms for floor below */}
                         {lowerFloorRooms.map(room => (
                             <Room
@@ -71,6 +73,8 @@ export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
                                 isSelected={room.id === selectedRoomId}
                                 isExporting={isExporting}
                                 onMouseDown={(e) => {
+                                    // Middle-button pan must bubble to canvas parent
+                                    if (e.button === 1) return;
                                     e.stopPropagation();
                                     onExistingRoomDragStart(room, e);
                                 }}

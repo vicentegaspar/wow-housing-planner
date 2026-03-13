@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      test: {
+        environment: 'jsdom',
+        globals: true,
+        include: ['__tests__/**/*.test.{ts,tsx}'],
+        coverage: {
+          reporter: ['text', 'html'],
+        },
+      },
     };
 });

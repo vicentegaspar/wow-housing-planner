@@ -1,32 +1,36 @@
-
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Modal } from './Modal';
 import type { Layout } from '../types';
+import { clampLayoutFloors, MAX_FLOORS } from '../layoutFloors';
 
 interface ExportModalProps {
     onClose: () => void;
-    exportString: string;
     layout: Layout;
     onExportPDF: () => void;
     isExportingPDF: boolean;
 }
 
-export const ExportModal: React.FC<ExportModalProps> = ({ onClose, exportString, layout, onExportPDF, isExportingPDF }) => {
+export const ExportModal: React.FC<ExportModalProps> = ({ onClose, layout, onExportPDF, isExportingPDF }) => {
     const [format, setFormat] = useState<'base64' | 'json'>('base64');
     const [copyButtonText, setCopyButtonText] = useState('Copy to Clipboard');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    /** Export always uses floors 1–MAX_FLOORS so JSON and shareable code match the app. */
+    const { layout: exportLayout } = useMemo(() => clampLayoutFloors(layout), [layout]);
+
     const hasAnyRooms = useMemo(() => {
-        return Object.values(layout.floors).some(f => f.rooms.length > 0);
-    }, [layout]);
+        return Object.values(exportLayout.floors).some((f) => f.rooms.length > 0);
+    }, [exportLayout]);
 
     const exportContent = useMemo(() => {
-        if (format === 'json') {
-            return JSON.stringify(layout, null, 2);
+        const json = JSON.stringify(exportLayout, null, 2);
+        if (format === 'json') return json;
+        try {
+            return btoa(unescape(encodeURIComponent(json)));
+        } catch {
+            return '';
         }
-        return exportString;
-    }, [format, exportString, layout]);
+    }, [format, exportLayout]);
 
     const handleCopy = () => {
         if (textareaRef.current) {
@@ -77,7 +81,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose, exportString,
             }
         >
             <div className="mb-4">
-                 <p className="mb-2 text-sm">Choose an export format. Use "Shareable Code" for easy copy-pasting, or "JSON File" for backups.</p>
+                <p className="mb-2 text-sm">
+                    Choose an export format. Shareable Code and JSON include only <strong>floors 1–{MAX_FLOORS}</strong> (same as the app). Use Shareable Code to paste into Import, or JSON for backups.
+                </p>
                  <div className="flex gap-4 p-1 bg-gray-900/50 rounded-md">
                     <button 
                         onClick={() => setFormat('base64')} 

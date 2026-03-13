@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import type { Layout } from '../types';
+import { MAX_FLOORS } from '../layoutFloors';
 import { Room } from './Room';
 import { ROOM_DEFINITIONS } from '../constants';
 
@@ -21,8 +22,16 @@ export const ExportPreview: React.FC<ExportPreviewProps> = ({ isExporting, layou
             const generatePdf = async () => {
                 try {
                     const floorsToExport = Object.entries(layout.floors)
-                        .map(([num, data]) => ({ floorNumber: parseInt(num, 10), rooms: data.rooms }))
-                        .filter(floor => floor.rooms.length > 0)
+                        .map(([num, data]) => ({
+                            floorNumber: parseInt(num, 10),
+                            rooms: data.rooms || [],
+                        }))
+                        .filter(
+                            (floor) =>
+                                floor.floorNumber >= 1 &&
+                                floor.floorNumber <= MAX_FLOORS &&
+                                floor.rooms.length > 0
+                        )
                         .sort((a, b) => a.floorNumber - b.floorNumber);
 
                     if (floorsToExport.length === 0) {
@@ -131,7 +140,8 @@ export const ExportPreview: React.FC<ExportPreviewProps> = ({ isExporting, layou
     return (
         <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -1 }}>
             {Object.entries(layout.floors).map(([floorNumber, floorData]) => {
-                if (floorData.rooms.length === 0) return null;
+                const n = parseInt(floorNumber, 10);
+                if (n < 1 || n > MAX_FLOORS || floorData.rooms.length === 0) return null;
 
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 floorData.rooms.forEach(room => {

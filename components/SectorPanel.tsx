@@ -20,8 +20,8 @@ interface SectorPanelProps {
 }
 
 const SectorForm: React.FC<{
-    sector: Omit<Sector, 'showLabel'> | null;
-    onSave: (sector: Omit<Sector, 'showLabel'>) => void;
+    sector: Sector | null;
+    onSave: (sector: Sector) => void;
     onCancel: () => void;
     assigningSectorId: string | null;
     onSetAssigningSector: (id: string | null) => void;
@@ -29,22 +29,26 @@ const SectorForm: React.FC<{
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [color, setColor] = useState(SECTOR_COLORS[0].hex);
-    
+    const [textureData, setTextureData] = useState<string | undefined>(undefined);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
     useEffect(() => {
         if (sector) {
             setName(sector.name);
             setDescription(sector.description);
             setColor(sector.color);
+            setTextureData(sector.textureData);
         } else {
             setName('');
             setDescription('');
             setColor(SECTOR_COLORS[0].hex);
+            setTextureData(undefined);
         }
     }, [sector]);
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!name.trim()) {
+        if (!name.trim()) {
             alert("Sector name cannot be empty.");
             return;
         }
@@ -53,8 +57,20 @@ const SectorForm: React.FC<{
             name: name.trim(),
             description: description.trim(),
             color,
+            textureData: textureData || undefined,
         });
     };
+
+    const handleTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = () => setTextureData(reader.result as string);
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+    const handleRemoveTexture = () => setTextureData(undefined);
     
     const isAssigningThisSector = sector && assigningSectorId === sector.id;
 
@@ -101,6 +117,41 @@ const SectorForm: React.FC<{
                             </Tooltip>
                         ))}
                     </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-sm text-gray-400 font-bold">3D Texture (walls/floors)</label>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handleTextureUpload}
+                        className="hidden"
+                    />
+                    <div className="flex items-center gap-2">
+                        {textureData ? (
+                            <>
+                                <div className="w-12 h-12 rounded border border-gray-600 overflow-hidden flex-shrink-0 bg-gray-800">
+                                    <img src={textureData} alt="Texture" className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-gray-400 truncate">Texture loaded</p>
+                                    <button type="button" onClick={handleRemoveTexture} className="text-xs text-red-400 hover:text-red-300 mt-0.5">
+                                        Remove
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full wow-button !py-2 text-sm !border-dashed"
+                            >
+                                Import texture (JPG, PNG, WebP)
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-[10px] text-gray-500">Used in 3D view for walls and floors</p>
                 </div>
             </div>
             {sector && (

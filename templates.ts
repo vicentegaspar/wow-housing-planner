@@ -132,15 +132,15 @@ const dwarvenForge: Layout = {
 
 const dwarvenBunker: Layout = {
     floors: {
-        0: { rooms: [{ id: 'db-1', shape: RoomShape.SQUARE_SMALL, x: 100, y: 100, rotation: 0, sectorId: 'entrance' }, { id: 'db-2', shape: RoomShape.STAIRS_DOWN, x: 100, y: 150, rotation: 0 }] },
-        "-1": { rooms: [
+        1: { rooms: [{ id: 'db-1', shape: RoomShape.SQUARE_SMALL, x: 100, y: 100, rotation: 0, sectorId: 'entrance' }, { id: 'db-2', shape: RoomShape.STAIRS_DOWN, x: 100, y: 150, rotation: 0 }] },
+        2: { rooms: [
             { id: 'db-3', shape: RoomShape.LARGE_SQUARE, x: 25, y: 50, rotation: 0, sectorId: 'hall' },
             { id: 'db-4', shape: RoomShape.RECTANGLE_LONG, x: 225, y: 87.5, rotation: 0, sectorId: 'barracks' },
             { id: 'db-5', shape: RoomShape.RECTANGLE_LONG, x: 225, y: 162.5, rotation: 0, sectorId: 'barracks' },
             { id: 'db-6', shape: RoomShape.STAIRS_UP, x: 75, y: 50, rotation: 0 },
             { id: 'db-7', shape: RoomShape.STAIRS_DOWN, x: 175, y: 50, rotation: 0 },
         ]},
-        "-2": { rooms: [
+        3: { rooms: [
             { id: 'db-8', shape: RoomShape.OCTAGONAL, x: 113, y: 150, rotation: 0, sectorId: 'command' },
             { id: 'db-9', shape: RoomShape.SQUARE, x: 25, y: 150, rotation: 0, sectorId: 'forge' },
             { id: 'db-10', shape: RoomShape.U_SHAPED, x: 213, y: 150, rotation: 0, sectorId: 'storage' },
@@ -326,14 +326,14 @@ const undeadCrypt: Layout = {
 
 const undeadLaboratory: Layout = {
     floors: {
-        0: { rooms: [{ id: 'ul-1', shape: RoomShape.SQUARE_SMALL, x: 100, y: 100, rotation: 0, sectorId: 'entrance' }, { id: 'ul-2', shape: RoomShape.STAIRS_DOWN, x: 100, y: 150, rotation: 0 }] },
-        "-1": { rooms: [
+        1: { rooms: [{ id: 'ul-1', shape: RoomShape.SQUARE_SMALL, x: 100, y: 100, rotation: 0, sectorId: 'entrance' }, { id: 'ul-2', shape: RoomShape.STAIRS_DOWN, x: 100, y: 150, rotation: 0 }] },
+        2: { rooms: [
             { id: 'ul-3', shape: RoomShape.CROSS_SHAPED, x: 150, y: 150, rotation: 0, sectorId: 'lab' },
             { id: 'ul-4', shape: RoomShape.RECTANGLE, x: 300, y: 187.5, rotation: 0, sectorId: 'storage' },
             { id: 'ul-5', shape: RoomShape.STAIRS_UP, x: 200, y: 100, rotation: 0 },
             { id: 'ul-6', shape: RoomShape.STAIRS_DOWN, x: 100, y: 200, rotation: 0 },
         ]},
-        "-2": { rooms: [
+        3: { rooms: [
             { id: 'ul-7', shape: RoomShape.U_SHAPED, x: 50, y: 150, rotation: 0, sectorId: 'holding' },
             { id: 'ul-8', shape: RoomShape.OCTAGONAL, x: 200, y: 150, rotation: 0, sectorId: 'chamber' },
             { id: 'ul-9', shape: RoomShape.SQUARE, x: 300, y: 150, rotation: 0, sectorId: 'quarters' },
@@ -381,19 +381,19 @@ const neutralInn: Layout = {
 
 const sprawlingTavern: Layout = {
     floors: {
-        "-1": { rooms: [
+        1: { rooms: [
             { id: 'st-1', shape: RoomShape.LARGE_SQUARE, x: 100, y: 100, rotation: 0, sectorId: 'cellar' },
             { id: 'st-2', shape: RoomShape.RECTANGLE, x: 300, y: 137.5, rotation: 0, sectorId: 'secret' },
             { id: 'st-3', shape: RoomShape.STAIRS_UP, x: 100, y: 100, rotation: 0 },
         ]},
-        1: { rooms: [
+        2: { rooms: [
             { id: 'st-4', shape: RoomShape.T_SHAPED, x: 125, y: 125, rotation: 0, sectorId: 'taproom' },
             { id: 'st-5', shape: RoomShape.LARGE_SQUARE, x: 275, y: 100, rotation: 0, sectorId: 'taproom' },
             { id: 'st-6', shape: RoomShape.SQUARE, x: 25, y: 150, rotation: 0, sectorId: 'kitchen' },
             { id: 'st-7', shape: RoomShape.STAIRS_DOWN, x: 175, y: 75, rotation: 0 },
             { id: 'st-8', shape: RoomShape.STAIRS_UP, x: 75, y: 250, rotation: 0 },
         ]},
-        2: { rooms: [
+        3: { rooms: [
             { id: 'st-9', shape: RoomShape.RECTANGLE_WIDE, x: 50, y: 100, rotation: 0, sectorId: 'owner' },
             { id: 'st-10', shape: RoomShape.SQUARE, x: 200, y: 112.5, rotation: 0, sectorId: 'room' },
             { id: 'st-11', shape: RoomShape.SQUARE, x: 200, y: 212.5, rotation: 0, sectorId: 'room' },

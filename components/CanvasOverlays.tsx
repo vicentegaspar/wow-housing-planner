@@ -1,4 +1,5 @@
 import React from 'react';
+import { MAX_FLOORS } from '../layoutFloors';
 
 interface CanvasOverlaysProps {
     totalArea: number;
@@ -27,6 +28,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({ totalArea, areaL
                             style={{ width: `${Math.min(100, areaPercentage)}%` }}
                         ></div>
                     </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Sum of rooms on floors 1–{MAX_FLOORS}</p>
                 </div>
 
                 {/* Divider */}
