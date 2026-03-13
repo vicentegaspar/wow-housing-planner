@@ -296,7 +296,33 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
 
     const handleWheel = (e: React.WheelEvent) => {
         if (assigningSectorId) return;
-        handleZoom(-e.deltaY * 0.001);
+        
+        const zoomDelta = -e.deltaY * 0.001;
+        const targetElement = e.currentTarget as HTMLElement;
+        const rect = targetElement.getBoundingClientRect();
+        
+        // Cursor position relative to the container
+        const cursorX = e.clientX - rect.left;
+        const cursorY = e.clientY - rect.top;
+
+        setZoom(prevZoom => {
+            const newZoom = Math.max(0.2, Math.min(3, prevZoom + zoomDelta));
+            if (newZoom === prevZoom) return prevZoom; // No change
+
+            setPan(prevPan => {
+                // Calculate position of cursor in unscaled space
+                const unscaledX = (cursorX - prevPan.x) / prevZoom;
+                const unscaledY = (cursorY - prevPan.y) / prevZoom;
+                
+                // Calculate new pan to keep the unscaled point under the cursor
+                const newPanX = cursorX - unscaledX * newZoom;
+                const newPanY = cursorY - unscaledY * newZoom;
+
+                return { x: newPanX, y: newPanY };
+            });
+
+            return newZoom;
+        });
     };
     
     const handlePanPointerDown = (e: React.PointerEvent) => {
@@ -311,10 +337,16 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
 
     const handlePanPointerMove = (e: React.PointerEvent) => {
         if (!isPanningRef.current) return;
+        
+        // Calculate deltas immediately before state updates
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        
         setPan(prevPan => ({
-            x: prevPan.x + e.clientX - panStartRef.current.x,
-            y: prevPan.y + e.clientY - panStartRef.current.y,
+            x: prevPan.x + dx,
+            y: prevPan.y + dy,
         }));
+        
         panStartRef.current = { x: e.clientX, y: e.clientY };
     };
 
