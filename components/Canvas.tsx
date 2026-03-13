@@ -15,14 +15,16 @@ interface CanvasProps {
     selectedRoomId: string | null;
     isExporting: boolean;
     onWheel: (e: React.WheelEvent) => void;
-    onMouseDown: (e: React.MouseEvent) => void;
-    onExistingRoomDragStart: (room: RoomInstance, e: React.MouseEvent) => void;
+    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: (e: React.PointerEvent) => void;
+    onExistingRoomDragStart: (room: RoomInstance, e: React.PointerEvent) => void;
     onRoomClick: (id: string) => void;
     assigningSectorId: string | null;
 }
 
 export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
-    ({ layout, currentFloor, lowerFloorRooms, zoom, pan, isPanning, draggedRoom, selectedRoomId, isExporting, onWheel, onMouseDown, onExistingRoomDragStart, onRoomClick, assigningSectorId }, ref) => {
+    ({ layout, currentFloor, lowerFloorRooms, zoom, pan, isPanning, draggedRoom, selectedRoomId, isExporting, onWheel, onPointerDown, onPointerMove, onPointerUp, onExistingRoomDragStart, onRoomClick, assigningSectorId }, ref) => {
         const rooms = layout.floors[currentFloor]?.rooms || [];
         const sectors = layout.sectors || {};
         
@@ -42,7 +44,9 @@ export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
                     touchAction: 'none',
                 }}
                 onWheel={onWheel}
-                onPointerDown={onMouseDown}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
             >
                 <div
                     className="w-full h-full"
@@ -72,8 +76,7 @@ export const Canvas = forwardRef<HTMLDivElement, CanvasProps>(
                                 sectors={sectors}
                                 isSelected={room.id === selectedRoomId}
                                 isExporting={isExporting}
-                                onMouseDown={(e) => {
-                                    // Middle-button pan must bubble to canvas parent
+                                onPointerDown={(e) => {
                                     if (e.button === 1) return;
                                     e.stopPropagation();
                                     onExistingRoomDragStart(room, e);

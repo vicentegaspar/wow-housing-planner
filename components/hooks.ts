@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Layout, RoomInstance, RoomShape, Point, DraggedRoom, Sector } from '../types';
 import { ROOM_DEFINITIONS, SNAP_DISTANCE } from '../constants';
 import { clampLayoutFloors, MAX_FLOORS } from '../layoutFloors';
@@ -288,7 +288,6 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
     const [pan, setPan] = useState<Point>(initial.pan);
     const [isPanning, setIsPanning] = useState(false);
     const panStartRef = useRef<Point>({ x: 0, y: 0 });
-    /** Sync with isPanning so window listeners react on the same frame as mousedown (no effect delay). */
     const isPanningRef = useRef(false);
 
     const handleZoom = useCallback((delta: number) => {
@@ -300,46 +299,30 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
         handleZoom(-e.deltaY * 0.001);
     };
     
-    /**
-     * Pan: attach move/up only after mousedown on the canvas (empty area).
-     * Using document + capture ensures we still receive events if something
-     * stops propagation on the canvas tree, and avoids relying on a single
-     * permanent window listener that can get out of sync with App’s own
-     * mousemove/mouseup subscriptions.
-     */
-    const handlePanMouseDown = (e: React.MouseEvent | React.PointerEvent) => {
+    const handlePanPointerDown = (e: React.PointerEvent) => {
         if (assigningSectorId) return;
-        if (e.button !== undefined && e.button !== 0 && e.button !== 1) return;
-        e.preventDefault();
-        e.stopPropagation();
+        if (e.button !== 0 && e.button !== 1) return;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         isPanningRef.current = true;
         setIsPanning(true);
         panStartRef.current = { x: e.clientX, y: e.clientY };
 
-        const onMove = (ev: MouseEvent | PointerEvent) => {
-            if (!isPanningRef.current) return;
-            setPan(prevPan => ({
-                x: prevPan.x + ev.clientX - panStartRef.current.x,
-                y: prevPan.y + ev.clientY - panStartRef.current.y,
-            }));
-            panStartRef.current = { x: ev.clientX, y: ev.clientY };
-        };
+    };
 
-        const onUp = () => {
-            isPanningRef.current = false;
-            setIsPanning(false);
-            document.removeEventListener('mousemove', onMove, true);
-            document.removeEventListener('pointermove', onMove, true);
-            document.removeEventListener('mouseup', onUp, true);
-            document.removeEventListener('pointerup', onUp, true);
-            document.removeEventListener('pointercancel', onUp, true);
-        };
+    const handlePanPointerMove = (e: React.PointerEvent) => {
+        if (!isPanningRef.current) return;
+        setPan(prevPan => ({
+            x: prevPan.x + e.clientX - panStartRef.current.x,
+            y: prevPan.y + e.clientY - panStartRef.current.y,
+        }));
+        panStartRef.current = { x: e.clientX, y: e.clientY };
+    };
 
-        document.addEventListener('mousemove', onMove, { capture: true });
-        document.addEventListener('pointermove', onMove, { capture: true });
-        document.addEventListener('mouseup', onUp, { capture: true });
-        document.addEventListener('pointerup', onUp, { capture: true });
-        document.addEventListener('pointercancel', onUp, { capture: true });
+    const handlePanPointerUp = (e: React.PointerEvent) => {
+        if (!isPanningRef.current) return;
+        isPanningRef.current = false;
+        setIsPanning(false);
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     };
 
     /** Debounced so pan drags don’t write localStorage on every mousemove (~60+ Hz). */
@@ -358,7 +341,7 @@ export const useCanvasControls = (assigningSectorId: string | null) => {
         return () => clearTimeout(t);
     }, [zoom, pan]);
 
-    return { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown };
+    return { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanPointerDown, handlePanPointerMove, handlePanPointerUp };
 };
 
 
@@ -416,7 +399,7 @@ export const useRoomInteraction = (
         });
     };
 
-    const handleExistingRoomDragStart = (room: RoomInstance, e: React.MouseEvent) => {
+    const handleExistingRoomDragStart = (room: RoomInstance, e: React.MouseEvent | React.PointerEvent) => {
         if (!canvasRef.current || assigningSectorId) return;
         if (e.button === 1) return; // middle-button pan — not room drag
         setSelectedRoomId(null);

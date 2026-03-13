@@ -7,7 +7,7 @@ interface RoomProps {
     room: RoomInstance;
     sectors: Record<string, Sector>;
     className?: string;
-    onMouseDown?: (e: React.MouseEvent) => void;
+    onPointerDown?: (e: React.PointerEvent) => void;
     onClick?: (e: React.MouseEvent) => void;
     isSelected?: boolean;
     isExporting?: boolean;
@@ -17,7 +17,7 @@ interface RoomProps {
     [key: string]: any; // Allow other props like data-id
 }
 
-export const Room: React.FC<RoomProps> = React.memo(({ room, sectors, className, onMouseDown, onClick, isSelected, isExporting, isAssigning, assigningColor, isGhost, ...rest }) => {
+export const Room: React.FC<RoomProps> = React.memo(({ room, sectors, className, onPointerDown, onClick, isSelected, isExporting, isAssigning, assigningColor, isGhost, ...rest }) => {
     const [isHovered, setIsHovered] = useState(false);
     const definition = ROOM_DEFINITIONS[room.shape];
     if (!definition) return null;
@@ -76,7 +76,7 @@ export const Room: React.FC<RoomProps> = React.memo(({ room, sectors, className,
     return (
         <g
             transform={transform}
-            onMouseDown={isGhost ? undefined : onMouseDown}
+            onPointerDown={isGhost ? undefined : onPointerDown}
             onClick={isGhost ? undefined : onClick}
             onMouseEnter={isGhost ? undefined : () => setIsHovered(true)}
             onMouseLeave={isGhost ? undefined : () => setIsHovered(false)}

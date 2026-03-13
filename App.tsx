@@ -83,7 +83,7 @@ const App: React.FC = () => {
 
     // Core Hooks
     const { layout, setLayout, currentFloor, setCurrentFloor, handleFloorChange, handleSaveSector, handleDeleteSector, handleImportLayout, handleSelectTemplate, handleNewBlankProject, undo, redo, canUndo, canRedo } = useLayoutManager(showStartupModal, setShowStartupModal);
-    const { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanMouseDown } = useCanvasControls(assigningSectorId);
+    const { zoom, setZoom, pan, setPan, isPanning, handleZoom, handleWheel, handlePanPointerDown, handlePanPointerMove, handlePanPointerUp } = useCanvasControls(assigningSectorId);
     const { draggedRoom, setDraggedRoom, selectedRoomId, setSelectedRoomId, canvasRef, handleRoomDragStart, handleExistingRoomDragStart, handleMouseMove, handleMouseUp, handleRoomClick, handleCanvasClick } = useRoomInteraction({ layout, setLayout, currentFloor, zoom, pan, isPanning, assigningSectorId, setAssigningSectorId });
 
     const totalArea = useMemo(() => {
@@ -264,7 +264,6 @@ const App: React.FC = () => {
                 <div
                     className="flex-1 flex flex-col relative min-h-0"
                     onClick={handleCanvasClick}
-                    onPointerDown={handlePanMouseDown}
                 >
                     <CanvasOverlays 
                         totalArea={totalArea} 
@@ -283,7 +282,9 @@ const App: React.FC = () => {
                         selectedRoomId={selectedRoomId}
                         isExporting={isExportingPDF}
                         onWheel={handleWheel}
-                        onMouseDown={handlePanMouseDown}
+                        onPointerDown={handlePanPointerDown}
+                        onPointerMove={handlePanPointerMove}
+                        onPointerUp={handlePanPointerUp}
                         onExistingRoomDragStart={handleExistingRoomDragStart}
                         onRoomClick={handleRoomClick}
                         assigningSectorId={assigningSectorId}
