@@ -37,6 +37,7 @@ export function clampLayoutFloors(layout: Layout): {
             ...layout,
             floors: newFloors,
             sectors: layout.sectors || {},
+            assets3D: layout.assets3D || [],
         },
         droppedFloorIndices: dropped,
     };

@@ -8,10 +8,20 @@ import { motion } from 'framer-motion';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 const WALL_HEIGHT = 40;
 const WALL_THICKNESS = 2;
 const FLOOR_SEPARATION = 60;
+
+const ASSET_PRESETS = [
+    { name: 'Custom URL...', url: '' },
+    { name: 'Robot (Test)', url: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/RobotExpressive/RobotExpressive.glb' },
+    { name: 'Parrot (Test)', url: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Parrot.glb' },
+    { name: 'Primary Ion Drive (Test)', url: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/PrimaryIonDrive.glb' }
+];
 
 const ROOM_SHAPE_NAMES: Record<RoomShape, string> = {
     [RoomShape.SQUARE]: 'Square',
@@ -74,12 +84,13 @@ function textureFromDataUrl(dataUrl: string): THREE.Texture {
 
 interface ThreeDViewProps {
     layout: Layout;
+    setLayout: (newState: Layout | ((prevState: Layout) => Layout)) => void;
     onClose: () => void;
 }
 
 const MAX_PIXEL_RATIO = 2;
 
-const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
+const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, setLayout, onClose }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hiddenFloors, setHiddenFloors] = useState<Set<number>>(new Set());
@@ -87,8 +98,18 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const controlsRef = useRef<OrbitControls | null>(null);
+    const transformControlsRef = useRef<TransformControls | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const pmremRef = useRef<THREE.PMREMGenerator | null>(null);
+    
+    // UI states
+    const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+    const [newAssetUrl, setNewAssetUrl] = useState('');
+    const [newAssetName, setNewAssetName] = useState('');
+    const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
+    
+    // Track loaded assets slightly outside react state to avoid constant remounting
+    const loadedAssetsCache = useRef<Map<string, THREE.Group>>(new Map());
 
     const wallCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
     const floorCache = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
@@ -206,6 +227,42 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
         };
         controlsRef.current = controls;
 
+        const transformControls = new TransformControls(camera, renderer.domElement);
+        transformControls.addEventListener('dragging-changed', function (event) {
+            controls.enabled = !event.value;
+        });
+        
+        // When drag finishes, update the actual layout state via setLayout
+        transformControls.addEventListener('mouseUp', function () {
+            if (transformControls.object && transformControls.object.userData.assetId) {
+                const assetId = transformControls.object.userData.assetId;
+                const pos = transformControls.object.position;
+                const rot = transformControls.object.rotation;
+                const scale = transformControls.object.scale.x; // assuming uniform scale
+                
+                setLayout((prev) => {
+                    const assets = prev.assets3D || [];
+                    const index = assets.findIndex(a => a.id === assetId);
+                    if (index === -1) return prev;
+                    
+                    const newAssets = [...assets];
+                    newAssets[index] = {
+                        ...newAssets[index],
+                        x: pos.x,
+                        y: pos.y,
+                        z: pos.z,
+                        rotationX: rot.x,
+                        rotationY: rot.y,
+                        rotationZ: rot.z,
+                        scale: scale
+                    };
+                    return { ...prev, assets3D: newAssets };
+                });
+            }
+        });
+        scene.add(transformControls.getHelper());
+        transformControlsRef.current = transformControls;
+
         const hemi = new THREE.HemisphereLight(0xb8c4e8, 0x1a1d24, 0.55);
         scene.add(hemi);
 
@@ -287,11 +344,13 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
                 currentMount.removeChild(renderer.domElement);
             }
             controls.dispose();
+            transformControls.dispose();
             renderer.dispose();
             pmrem.dispose();
             pmremRef.current = null;
             cameraRef.current = null;
             controlsRef.current = null;
+            transformControlsRef.current = null;
             rendererRef.current = null;
 
             [wallCache, floorCache, roofCache].forEach((cacheRef) => {
@@ -326,7 +385,7 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
 
         let hasAnyRooms = false;
 
-        for (const [floorNum, floorData] of Object.entries(layout.floors)) {
+        for (const [floorNum, floorData] of Object.entries(layout.floors) as [string, import('../types').FloorLayout][]) {
             const floorIndex = parseInt(floorNum, 10);
             if (floorIndex < 1 || floorIndex > MAX_FLOORS) continue;
             const yPos = (floorIndex - 1) * FLOOR_SEPARATION;
@@ -360,7 +419,8 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
                     const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
                     if (length < 0.1) continue;
 
-                    const wallGeom = new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICKNESS);
+                    // Use RoundedBoxGeometry instead of BoxGeometry
+                    const wallGeom = new RoundedBoxGeometry(length, WALL_HEIGHT, WALL_THICKNESS, 2, 0.4);
                     const wallMesh = new THREE.Mesh(wallGeom, wallMat);
 
                     wallMesh.position.set(
@@ -428,7 +488,145 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
                 controls.update();
             }
         }
-    }, [layout, getWallMaterial, getFloorMaterial, getRoofMaterial]);
+    }, [layout.floors, layout.sectors, getWallMaterial, getFloorMaterial, getRoofMaterial]);
+
+    // Handle Asset3D spawning and loading
+    useEffect(() => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+
+        // Cleanup old assets that might no longer exist
+        const currentAssetIds = new Set((layout.assets3D || []).map(a => a.id));
+        const toRemove = scene.children.filter(c => c.userData.isAsset && !currentAssetIds.has(c.userData.assetId));
+        toRemove.forEach(obj => {
+            if (transformControlsRef.current?.object === obj) {
+                transformControlsRef.current.detach();
+            }
+            scene.remove(obj);
+        });
+
+        // Add or update assets
+        const assets = layout.assets3D || [];
+        assets.forEach(asset => {
+            const isVisible = !hiddenFloors.has(asset.floorIndex);
+            
+            // Check if it already exists in scene
+            let assetGroup = scene.children.find(c => c.userData.isAsset && c.userData.assetId === asset.id) as THREE.Group;
+            
+            if (!assetGroup) {
+                assetGroup = new THREE.Group();
+                assetGroup.userData.isAsset = true;
+                assetGroup.userData.assetId = asset.id;
+                assetGroup.userData.floorIndex = asset.floorIndex;
+                scene.add(assetGroup);
+
+                if (asset.url) {
+                    // Try to load GLTF
+                    const loader = new GLTFLoader();
+                    loader.load(asset.url, (gltf) => {
+                        gltf.scene.traverse((child) => {
+                            if ((child as THREE.Mesh).isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                            }
+                        });
+                        // Center bounds
+                        const box = new THREE.Box3().setFromObject(gltf.scene);
+                        const center = box.getCenter(new THREE.Vector3());
+                        gltf.scene.position.sub(center);
+                        // Bottom align it
+                        gltf.scene.position.y += (box.max.y - box.min.y) / 2;
+                        
+                        assetGroup.add(gltf.scene);
+                    }, undefined, (e) => {
+                        console.error('Failed to load asset URL', e);
+                        addPlaceholder(assetGroup);
+                    });
+                } else {
+                    addPlaceholder(assetGroup);
+                }
+            }
+
+            // Sync visual transform representation
+            assetGroup.position.set(asset.x, asset.y, asset.z);
+            assetGroup.rotation.set(asset.x, asset.rotationY, asset.rotationZ);
+            assetGroup.scale.set(asset.scale, asset.scale, asset.scale);
+            assetGroup.visible = isVisible;
+        });
+
+        function addPlaceholder(group: THREE.Group) {
+            const geom = new THREE.BoxGeometry(20, 20, 20);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xaa22ff });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.y = 10; // Half height so origins sit on floor
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+        }
+    }, [layout.assets3D, hiddenFloors]);
+    
+    // Raycaster for selecting assets
+    useEffect(() => {
+        const mount = mountRef.current;
+        const camera = cameraRef.current;
+        const scene = sceneRef.current;
+        if (!mount || !camera || !scene) return;
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const onPointerDown = (event: PointerEvent) => {
+             // Only select if it's a left click and we aren't clicking UI
+            if (event.button !== 0) return;
+            const target = event.target as HTMLElement;
+            if (target !== mount.querySelector('canvas')) return;
+
+            const rect = mount.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            // Find all asset groups
+            const assetGroups = scene.children.filter(c => c.userData.isAsset && c.visible);
+            
+            // Check intersection deeply through the groups
+            const intersects = raycaster.intersectObjects(assetGroups, true);
+
+            if (intersects.length > 0) {
+                // Find nearest parent group
+                let object: THREE.Object3D | null = intersects[0].object;
+                while (object && !object.userData.isAsset) {
+                    object = object.parent;
+                }
+                
+                if (object && object.userData.assetId) {
+                    setSelectedAssetId(object.userData.assetId);
+                    transformControlsRef.current?.attach(object);
+                }
+            } else {
+                // Deselect if we clicked empty space AND aren't hovering over transform manipulators
+                if (transformControlsRef.current && !transformControlsRef.current.dragging) {
+                     // Check if hovered over transform control itself mapping
+                    const tcIntersects = raycaster.intersectObjects([transformControlsRef.current], true);
+                    if (tcIntersects.length === 0) {
+                         setSelectedAssetId(null);
+                         transformControlsRef.current.detach();
+                    }
+                }
+            }
+        };
+
+        mount.addEventListener('pointerdown', onPointerDown);
+        return () => mount.removeEventListener('pointerdown', onPointerDown);
+    }, []);
+
+    // Change transform control mode
+    useEffect(() => {
+        if (transformControlsRef.current) {
+            transformControlsRef.current.setMode(transformMode);
+        }
+    }, [transformMode]);
 
     useEffect(() => {
         const scene = sceneRef.current;
@@ -450,7 +648,7 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
 
     const floorsWithRooms = useMemo(
         () =>
-            Object.entries(layout.floors)
+            (Object.entries(layout.floors) as [string, import('../types').FloorLayout][])
                 .filter(([, f]) => f.rooms?.length)
                 .map(([n]) => parseInt(n, 10))
                 .sort((a, b) => a - b),
@@ -473,6 +671,92 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
             if (isSoloed) return new Set();
             return new Set(floorsWithRooms.filter((f) => f !== floorIndex));
         });
+    };
+
+    const handleAddAsset = (e: React.FormEvent) => {
+        e.preventDefault();
+        const baseFloorY = (floorsWithRooms[0] ? floorsWithRooms[0] - 1 : 0) * FLOOR_SEPARATION;
+        const newAsset = {
+            id: crypto.randomUUID(),
+            name: newAssetName || 'New Asset',
+            url: newAssetUrl.trim() || undefined,
+            x: 0,
+            y: baseFloorY,
+            z: 0,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+            scale: 1,
+            floorIndex: floorsWithRooms[0] || 1
+        };
+        setLayout(prev => ({
+            ...prev,
+            assets3D: [...(prev.assets3D || []), newAsset]
+        }));
+        setNewAssetName('');
+        setNewAssetUrl('');
+        setSelectedAssetId(newAsset.id);
+        
+        // Wait for next tick so effect adds to scene, then attach
+        setTimeout(() => {
+            const scene = sceneRef.current;
+            if (!scene) return;
+            const group = scene.children.find(c => c.userData.assetId === newAsset.id);
+            if (group && transformControlsRef.current) {
+                transformControlsRef.current.attach(group);
+            }
+        }, 50);
+    };
+
+    const handleDeleteAsset = (id: string) => {
+        if (selectedAssetId === id) {
+             setSelectedAssetId(null);
+             transformControlsRef.current?.detach();
+        }
+        setLayout(prev => ({
+            ...prev,
+            assets3D: (prev.assets3D || []).filter(a => a.id !== id)
+        }));
+    };
+
+    const handleExportAssetsJSON = () => {
+        const assets = layout.assets3D || [];
+        const jsonString = JSON.stringify(assets, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "wow-housing-assets.json";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportAssetsJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const importedAssets = JSON.parse(event.target?.result as string);
+                if (!Array.isArray(importedAssets)) throw new Error("File must contain array of assets");
+                
+                // Add unique ids to newly imported ones
+                const sanitized = importedAssets.map(a => ({
+                    ...a,
+                    id: crypto.randomUUID()
+                }));
+
+                setLayout(prev => ({
+                    ...prev,
+                    assets3D: [...(prev.assets3D || []), ...sanitized]
+                }));
+                alert(`Successfully imported ${sanitized.length} assets.`);
+            } catch (err) {
+                alert("Invalid JSON file uploaded.");
+            }
+            e.target.value = ''; // Reset file input
+        };
+        reader.readAsText(file);
     };
 
     return (
@@ -609,13 +893,102 @@ const ThreeDView: React.FC<ThreeDViewProps> = ({ layout, onClose }) => {
                 )}
             </div>
 
-            <button
-                onClick={onClose}
-                className="absolute top-4 right-4 wow-button px-4 py-2 z-50"
-                aria-label="Close 3D View"
-            >
-                Close 3D View
-            </button>
+            {/* Asset Manager Panel */}
+            <div className="absolute top-4 right-4 flex flex-col gap-3 z-50 w-72 pointer-events-none">
+                <button
+                    onClick={onClose}
+                    className="wow-button px-4 py-2 pointer-events-auto self-end"
+                    aria-label="Close 3D View"
+                >
+                    Close 3D View
+                </button>
+                
+                <div className="wow-panel p-3 border-l text-sm pointer-events-auto max-h-[80vh] flex flex-col">
+                    <h3 className="font-title text-base text-yellow-400 mb-2">3D Asset Manager</h3>
+                    
+                    <form onSubmit={handleAddAsset} className="flex flex-col gap-2 mb-4 bg-gray-800/50 p-2 rounded">
+                        <input
+                            type="text"
+                            placeholder="Asset Name (e.g. Table)"
+                            value={newAssetName}
+                            onChange={(e) => setNewAssetName(e.target.value)}
+                            className="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs w-full"
+                        />
+                        <select 
+                            className="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs w-full text-gray-200"
+                            onChange={(e) => {
+                                const url = e.target.value;
+                                setNewAssetUrl(url);
+                                if (url && !newAssetName) {
+                                    const preset = ASSET_PRESETS.find(p => p.url === url);
+                                    if (preset) setNewAssetName(preset.name.replace(' (Test)', ''));
+                                }
+                            }}
+                            value={ASSET_PRESETS.find(p => p.url === newAssetUrl) ? newAssetUrl : ''}
+                        >
+                            {ASSET_PRESETS.map((preset, i) => (
+                                <option key={i} value={preset.url}>{preset.name}</option>
+                            ))}
+                        </select>
+                        <input
+                            type="text"
+                            placeholder=".glb/.gltf URL (optional)"
+                            value={newAssetUrl}
+                            onChange={(e) => setNewAssetUrl(e.target.value)}
+                            className="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs w-full"
+                        />
+                        <button type="submit" className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-1 px-2 rounded text-xs">
+                            Add Asset to Floor
+                        </button>
+                    </form>
+
+                    {selectedAssetId && (
+                        <div className="flex gap-1 mb-3 bg-gray-900 p-1 rounded justify-center">
+                            <button onClick={() => setTransformMode('translate')} className={`px-2 py-1 text-xs rounded ${transformMode === 'translate' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}`}>Move</button>
+                            <button onClick={() => setTransformMode('rotate')} className={`px-2 py-1 text-xs rounded ${transformMode === 'rotate' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}`}>Rotate</button>
+                            <button onClick={() => setTransformMode('scale')} className={`px-2 py-1 text-xs rounded ${transformMode === 'scale' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-400 hover:bg-gray-800'}`}>Scale</button>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto mb-3 min-h-[100px] border border-gray-700 rounded bg-gray-900/50 p-1">
+                        {!(layout.assets3D?.length) && <p className="text-gray-500 italic text-center text-xs p-2">No assets added.</p>}
+                        {layout.assets3D?.map(asset => (
+                            <div key={asset.id} className={`flex items-center justify-between p-1.5 rounded text-xs mb-1 ${selectedAssetId === asset.id ? 'bg-yellow-600/30 border border-yellow-600/50' : 'hover:bg-gray-800'}`}>
+                                <button 
+                                    className="text-left flex-1 truncate pr-2 text-gray-200" 
+                                    onClick={() => {
+                                        setSelectedAssetId(asset.id);
+                                        const scene = sceneRef.current;
+                                        if (scene && transformControlsRef.current) {
+                                            const group = scene.children.find(c => c.userData.assetId === asset.id);
+                                            if (group) transformControlsRef.current.attach(group);
+                                        }
+                                    }}
+                                >
+                                    {asset.name}
+                                </button>
+                                <button onClick={() => handleDeleteAsset(asset.id)} className="text-red-400 hover:text-red-300 w-5 h-5 flex items-center justify-center rounded hover:bg-red-400/20">×</button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={handleExportAssetsJSON} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded text-xs">
+                            Export JSON
+                        </button>
+                        
+                        <label className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-1 px-2 rounded text-xs cursor-pointer text-center">
+                            Import JSON
+                            <input
+                                type="file"
+                                accept=".json"
+                                onChange={handleImportAssetsJSON}
+                                className="hidden"
+                            />
+                        </label>
+                    </div>
+                </div>
+            </div>
         </motion.div>
     );
 };

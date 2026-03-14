@@ -1,4 +1,5 @@
 
+import React from 'react';
 
 export interface Point {
     x: number;
@@ -56,9 +57,24 @@ export interface Sector {
     textureData?: string;
 }
 
+export interface Asset3D {
+    id: string;
+    name: string;
+    url?: string; // Optional URL to a .glb/.gltf file
+    x: number;
+    y: number;
+    z: number;
+    rotationX: number;
+    rotationY: number;
+    rotationZ: number;
+    scale: number;
+    floorIndex: number;
+}
+
 export interface Layout {
     floors: { [floor: number]: FloorLayout };
     sectors: Record<string, Sector>;
+    assets3D?: Asset3D[];
 }
 
 export interface DraggedRoom {

@@ -169,7 +169,7 @@ const App: React.FC = () => {
     };
 
     const hasAnyRooms = useMemo(() =>
-        Object.values(layout.floors).some(f => f.rooms.length > 0),
+        (Object.values(layout.floors) as import('./types').FloorLayout[]).some(f => f.rooms.length > 0),
     [layout.floors]);
 
     /** Neutral canvas view + flush stored viewport so reload doesn’t restore old pan/zoom. */
@@ -347,7 +347,7 @@ const App: React.FC = () => {
                             </div>
                         }
                     >
-                        <ThreeDViewLazy layout={layout} onClose={() => setIs3DViewOpen(false)} />
+                        <ThreeDViewLazy layout={layout} setLayout={setLayout} onClose={() => setIs3DViewOpen(false)} />
                     </Suspense>
                 )}
             </AnimatePresence>

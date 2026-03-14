@@ -26,43 +26,43 @@ interface ToolbarProps {
     canRedo: boolean;
 }
 
-const ToolbarButton: React.FC<{ onClick: () => void, children: React.ReactNode, disabled?: boolean, tooltip: string, isActive?: boolean }> = 
-({ onClick, children, disabled, tooltip, isActive }) => (
-    <Tooltip text={tooltip}>
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            className={`px-3 py-1.5 wow-button rounded-md text-sm transition-colors ${isActive ? '!border-yellow-400 !text-yellow-400' : ''}`}
-        >
-            {children}
-        </button>
-    </Tooltip>
-);
+const ToolbarButton: React.FC<{ onClick: () => void, children: React.ReactNode, disabled?: boolean, tooltip: string, isActive?: boolean }> =
+    ({ onClick, children, disabled, tooltip, isActive }) => (
+        <Tooltip text={tooltip}>
+            <button
+                onClick={onClick}
+                disabled={disabled}
+                className={`px-3 py-1.5 wow-button rounded-md text-sm transition-colors ${isActive ? '!border-yellow-400 !text-yellow-400' : ''}`}
+            >
+                {children}
+            </button>
+        </Tooltip>
+    );
 
 
-export const Toolbar: React.FC<ToolbarProps> = ({ 
-    currentFloor, 
-    onFloorChange, 
+export const Toolbar: React.FC<ToolbarProps> = ({
+    currentFloor,
+    onFloorChange,
     onZoom,
     onResetView,
-    layout, 
-    isSectorPanelOpen, 
-    onToggleSectorPanel, 
-    onToggle3DView, 
+    layout,
+    isSectorPanelOpen,
+    onToggleSectorPanel,
+    onToggle3DView,
     onNewProject,
     onOpenTemplateModal,
-    onOpenImportModal, 
+    onOpenImportModal,
     onOpenExportModal,
     onUndo,
     onRedo,
     canUndo,
     canRedo
 }) => {
-    
+
     const hasAnyRooms = useMemo(() => {
         return Object.values(layout.floors).some((f: FloorLayout) => f.rooms.length > 0);
     }, [layout]);
-    
+
     return (
         <header className="h-16 wow-panel flex items-center justify-between px-4 border-b flex-shrink-0 text-xs z-30 relative">
             <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
@@ -74,17 +74,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     className="h-11 w-11 rounded-lg object-cover ring-1 ring-yellow-500/30 shadow-md flex-shrink-0"
                     decoding="async"
                 />
-                <h1 className="text-xl font-title text-yellow-400 truncate">WoW Housing Planner</h1>
+                <h1 className="text-[10px] uppercase leading-none font-title text-yellow-400">
+                    WoW<br />Housing<br />Planner
+                </h1>
             </div>
-            
+
             <div className="flex items-center gap-4">
-                 <div className="flex items-center gap-2 text-gray-300">
+                <div className="flex items-center gap-2 text-gray-300">
                     <span className="font-bold text-gray-400">Controls:</span>
                     <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Alt+Drag</kbd> Duplicate</span>
                     <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">R</kbd>/<kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Shift+R</kbd> Rotate</span>
                     <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Drag</kbd> Pan</span>
                 </div>
-                
+
                 <div className="w-px h-8 bg-gray-600"></div>
 
                 <div className="flex items-center gap-2">
@@ -105,7 +107,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="w-px h-8 bg-gray-600"></div>
 
                 <div className="flex items-center gap-2">
-                     <ToolbarButton onClick={onToggleSectorPanel} isActive={isSectorPanelOpen} tooltip={isSectorPanelOpen ? "Hide Sectors" : "Show Sectors"}>
+                    <ToolbarButton onClick={onToggleSectorPanel} isActive={isSectorPanelOpen} tooltip={isSectorPanelOpen ? "Hide Sectors" : "Show Sectors"}>
                         Sectors
                     </ToolbarButton>
                     <ToolbarButton onClick={onToggle3DView} tooltip="Explore the current floor in 3D">
@@ -116,7 +118,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 <div className="w-px h-8 bg-gray-600"></div>
 
                 <div className="flex items-center gap-2">
-                     <ToolbarButton onClick={() => onZoom(-0.15)} tooltip="Zoom Out">
+                    <ToolbarButton onClick={() => onZoom(-0.15)} tooltip="Zoom Out">
                         Zoom -
                     </ToolbarButton>
                     <ToolbarButton onClick={() => onZoom(0.15)} tooltip="Zoom In">
@@ -128,8 +130,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     >
                         <span className="inline-flex items-center gap-1.5">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
-                                <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                                <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" />
+                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
                             </svg>
                             Reset view
                         </span>
@@ -138,7 +140,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
                 <div className="w-px h-8 bg-gray-600"></div>
 
-                 <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <ToolbarButton onClick={onUndo} disabled={!canUndo} tooltip="Undo (Ctrl+Z)">
                         Undo
                     </ToolbarButton>
@@ -159,7 +161,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             className="p-2 rounded-md text-yellow-400 hover:bg-gray-700/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
-                                <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z"/>
+                                <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z" />
                             </svg>
                         </button>
                     </Tooltip>
@@ -178,7 +180,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                             className="p-2 rounded-md text-yellow-400 hover:bg-gray-700/80 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" aria-hidden>
-                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z" />
                             </svg>
                         </button>
                     </Tooltip>
