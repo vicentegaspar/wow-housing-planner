@@ -1,6 +1,6 @@
 
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Tooltip } from './Tooltip';
 import type { FloorLayout, Layout } from '../types';
 import { ROOM_DEFINITIONS } from '../constants';
@@ -58,6 +58,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     canUndo,
     canRedo
 }) => {
+    const [savedVisible, setSavedVisible] = useState(false);
+
+    useEffect(() => {
+        setSavedVisible(true);
+        const t = setTimeout(() => setSavedVisible(false), 2000);
+        return () => clearTimeout(t);
+    }, [layout]);
 
     const hasAnyRooms = useMemo(() => {
         return Object.values(layout.floors).some((f: FloorLayout) => f.rooms.length > 0);
@@ -80,11 +87,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </div>
 
             <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-gray-300">
-                    <span className="font-bold text-gray-400">Controls:</span>
-                    <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Alt+Drag</kbd> Duplicate</span>
-                    <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">R</kbd>/<kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Shift+R</kbd> Rotate</span>
-                    <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Drag</kbd> Pan</span>
+                <div className="flex flex-col">
+                    <div className="flex items-center gap-2 text-gray-300">
+                        <span className="font-bold text-gray-400">Controls:</span>
+                        <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Alt+Drag</kbd> Duplicate</span>
+                        <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">R</kbd>/<kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Shift+R</kbd> Rotate</span>
+                        <span><kbd className="px-2 py-1 bg-gray-900 rounded border border-gray-600">Drag</kbd> Pan</span>
+                    </div>
+                     <span className={`text-[10px] text-green-400/80 font-mono transition-opacity duration-500 text-right pr-1 ${savedVisible ? 'opacity-100' : 'opacity-0'}`}>
+                        ✓ Auto-saved locally
+                    </span>
                 </div>
 
                 <div className="w-px h-8 bg-gray-600"></div>

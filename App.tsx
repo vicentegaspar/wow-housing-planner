@@ -5,7 +5,7 @@ import { Canvas } from './components/Canvas';
 import { Toolbar } from './components/Toolbar';
 import { ExportPreview } from './components/ExportPreview';
 import { SectorPanel } from './components/SectorPanel';
-const ThreeDViewLazy = lazy(() => import('./components/ThreeDView'));
+const ThreeDViewLazy = lazy(() => import('./components/3d/ThreeDEngine'));
 import { ImportModal } from './components/ImportModal';
 import { ExportModal } from './components/ExportModal';
 import { StartupModal } from './components/StartupModal';
